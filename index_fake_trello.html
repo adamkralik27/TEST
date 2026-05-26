@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskBoard – Můj Kanban</title>
+  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --surface: #ede6d6;
+      --surface2: #e4dcc8;
+      --border: rgba(139,118,80,0.2);
+      --text: #3a2e1e;
+      --text-muted: #8b7a5a;
+      --todo: #7a6340;
+      --todo-glow: rgba(122,99,64,0.25);
+      --inprogress: #a0631a;
+      --inprogress-glow: rgba(160,99,26,0.25);
+      --done: #5a7a3a;
+      --done-glow: rgba(90,122,58,0.25);
+      --radius: 14px;
+      --ral: #BB9959;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Work Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(139,118,80,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139,118,80,0.08) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 28px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      background: rgba(245,240,232,0.85);
+    }
+
+    .logo {
+      font-family: 'Work Sans', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--todo);
+      box-shadow: 0 0 12px var(--todo);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.8); }
+    }
+
+    .header-stats {
+      display: flex;
+      gap: 24px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-family: 'Work Sans', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      padding: 40px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .column {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 500px;
+    }
+
+    .column-header {
+      padding: 20px 20px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .column-title {
+      font-family: 'Work Sans', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .column-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .col-todo .column-dot { background: var(--todo); box-shadow: 0 0 8px var(--todo); }
+    .col-progress .column-dot { background: var(--inprogress); box-shadow: 0 0 8px var(--inprogress); }
+    .col-done .column-dot { background: var(--done); box-shadow: 0 0 8px var(--done); }
+
+    .col-todo { border-top: 2px solid var(--todo); }
+    .col-progress { border-top: 2px solid var(--inprogress); }
+    .col-done { border-top: 2px solid var(--done); }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-family: 'Work Sans', sans-serif;
+    }
+
+    .col-todo .badge { background: rgba(108,99,255,0.15); color: var(--todo); }
+    .col-progress .badge { background: rgba(255,140,66,0.15); color: var(--inprogress); }
+    .col-done .badge { background: rgba(46,207,142,0.15); color: var(--done); }
+
+    .cards-area {
+      flex: 1;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 100px;
+      transition: background 0.2s;
+    }
+
+    .cards-area.drag-over {
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+    }
+
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      cursor: grab;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      position: relative;
+      overflow: hidden;
+      animation: cardIn 0.3s ease;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+    }
+
+    .col-todo .card::before { background: var(--todo); }
+    .col-progress .card::before { background: var(--inprogress); }
+    .col-done .card::before { background: var(--done); }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-color: rgba(139,118,80,0.3);
+    }
+
+    .card.dragging {
+      opacity: 0.4;
+      cursor: grabbing;
+    }
+
+    /* Completed card */
+    .card.completed {
+      background: #e8f5e4;
+      border-color: rgba(90,122,58,0.35);
+    }
+
+    .card.completed::before {
+      background: var(--done) !important;
+    }
+
+    .card.completed .card-text {
+      text-decoration: line-through;
+      color: #7a9a6a;
+    }
+
+    /* Checkbox */
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .task-checkbox {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #BB9959;
+      border-radius: 4px;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background: white;
+      margin-top: 2px;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .task-checkbox:checked {
+      background: var(--done);
+      border-color: var(--done);
+    }
+
+    .task-checkbox:checked::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .task-checkbox:hover {
+      border-color: var(--done);
+    }
+
+    .card-text {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-tag {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tag-design { background: rgba(160,60,80,0.12); color: #a03c50; }
+    .tag-dev { background: rgba(40,90,160,0.12); color: #285aa0; }
+    .tag-marketing { background: rgba(160,110,20,0.15); color: #a06e14; }
+    .tag-bug { background: rgba(180,50,50,0.12); color: #b43232; }
+    .tag-feature { background: rgba(60,130,80,0.12); color: #3c8250; }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.2s, background 0.2s;
+      line-height: 1;
+    }
+
+    .delete-btn:hover {
+      color: #b43232;
+      background: rgba(180,50,50,0.1);
+    }
+
+    /* Add card button */
+    .add-btn {
+      margin: 0 16px 16px;
+      padding: 12px;
+      background: transparent;
+      border: 1px dashed rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: var(--text-muted);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .add-btn:hover {
+      border-color: rgba(255,255,255,0.25);
+      color: var(--text);
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius);
+      padding: 32px;
+      width: 100%;
+      max-width: 420px;
+      margin: 20px;
+      animation: modalIn 0.25s ease;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal h2 {
+      font-family: 'Work Sans', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+
+    .modal textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      color: var(--text);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 100px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+
+    .modal textarea:focus {
+      outline: none;
+      border-color: var(--ral);
+    }
+
+    .modal select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 14px;
+      margin-bottom: 20px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b7a5a' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+
+    .modal select:focus { outline: none; border-color: var(--ral); }
+
+    .modal-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .modal-btns {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-cancel {
+      flex: 1;
+      padding: 12px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-muted);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-cancel:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+    .btn-add {
+      flex: 2;
+      padding: 12px;
+      background: #BB9959;
+      border: none;
+      border-radius: 10px;
+      color: #3a2e1e;
+      font-family: 'Work Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-add:hover { opacity: 0.85; transform: translateY(-1px); }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 20px;
+      opacity: 0.6;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header { padding: 20px; }
+      .header-stats { gap: 16px; }
+      main { padding: 20px; grid-template-columns: 1fr; }
+      .column { min-height: 200px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    TaskBoard
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <div class="stat-num" id="stat-todo">0</div>
+      <div class="stat-label">K vypracování</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="stat-progress">0</div>
+      <div class="stat-label">Probíhá</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="stat-done">0</div>
+      <div class="stat-label">Hotovo</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- K vypracování -->
+  <div class="column col-todo">
+    <div class="column-header">
+      <div class="column-title">
+        <div class="column-dot"></div>
+        K vypracování
+      </div>
+      <span class="badge" id="badge-todo">0</span>
+    </div>
+    <div class="cards-area" id="col-todo" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event, 'todo')"></div>
+    <button class="add-btn" onclick="openModal('todo')">+ Přidat úkol</button>
+  </div>
+
+  <!-- Probíhá -->
+  <div class="column col-progress">
+    <div class="column-header">
+      <div class="column-title">
+        <div class="column-dot"></div>
+        Probíhá
+      </div>
+      <span class="badge" id="badge-progress">0</span>
+    </div>
+    <div class="cards-area" id="col-progress" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event, 'progress')"></div>
+    <button class="add-btn" onclick="openModal('progress')">+ Přidat úkol</button>
+  </div>
+
+  <!-- Hotovo -->
+  <div class="column col-done">
+    <div class="column-header">
+      <div class="column-title">
+        <div class="column-dot"></div>
+        Hotovo
+      </div>
+      <span class="badge" id="badge-done">0</span>
+    </div>
+    <div class="cards-area" id="col-done" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event, 'done')"></div>
+    <button class="add-btn" onclick="openModal('done')">+ Přidat úkol</button>
+  </div>
+</main>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>Nový úkol</h2>
+    <span class="modal-label">Popis úkolu</span>
+    <textarea id="modal-text" placeholder="Co je potřeba udělat?"></textarea>
+    <span class="modal-label">Kategorie</span>
+    <select id="modal-tag">
+      <option value="dev">💻 Vývoj</option>
+      <option value="design">🎨 Design</option>
+      <option value="marketing">📣 Marketing</option>
+      <option value="bug">🐛 Bug</option>
+      <option value="feature">✨ Nová funkce</option>
+    </select>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Zrušit</button>
+      <button class="btn-add" onclick="addCard()">Přidat úkol</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentColumn = 'todo';
+  let draggedCard = null;
+
+  // Výchozí úkoly
+  const defaultCards = [
+    { col: 'todo', text: 'Navrhnout nové logo projektu', tag: 'design' },
+    { col: 'todo', text: 'Sepsat požadavky na novou funkci', tag: 'feature' },
+    { col: 'progress', text: 'Opravit chybu v přihlašování', tag: 'bug' },
+    { col: 'progress', text: 'Optimalizovat rychlost načítání', tag: 'dev' },
+    { col: 'done', text: 'Spustit kampaň na sociálních sítích', tag: 'marketing' },
+    { col: 'done', text: 'Aktualizovat dokumentaci', tag: 'dev' },
+  ];
+
+  function createCard(text, tag, colId) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.draggable = true;
+    card.dataset.col = colId;
+
+    const tagLabels = {
+      design: { label: 'Design', cls: 'tag-design' },
+      dev: { label: 'Vývoj', cls: 'tag-dev' },
+      marketing: { label: 'Marketing', cls: 'tag-marketing' },
+      bug: { label: 'Bug', cls: 'tag-bug' },
+      feature: { label: 'Funkce', cls: 'tag-feature' },
+    };
+
+    const tagInfo = tagLabels[tag] || tagLabels['dev'];
+
+    card.innerHTML = `
+      <div class="card-top">
+        <input type="checkbox" class="task-checkbox" onchange="toggleDone(this)">
+        <div class="card-text">${text}</div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag ${tagInfo.cls}">${tagInfo.label}</span>
+        <button class="delete-btn" onclick="deleteCard(this)" title="Smazat">✕</button>
+      </div>
+    `;
+
+    card.addEventListener('dragstart', () => {
+      draggedCard = card;
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      draggedCard = null;
+    });
+
+    return card;
+  }
+
+  function toggleDone(checkbox) {
+    const card = checkbox.closest('.card');
+    card.classList.toggle('completed', checkbox.checked);
+  }
+
+  function addCard() {
+    const text = document.getElementById('modal-text').value.trim();
+    const tag = document.getElementById('modal-tag').value;
+    if (!text) return;
+
+    const col = document.getElementById('col-' + currentColumn);
+    const emptyState = col.querySelector('.empty-state');
+    if (emptyState) emptyState.remove();
+
+    col.appendChild(createCard(text, tag, currentColumn));
+    updateStats();
+    closeModal();
+  }
+
+  function deleteCard(btn) {
+    btn.closest('.card').remove();
+    updateStats();
+  }
+
+  function openModal(col) {
+    currentColumn = col;
+    document.getElementById('modal-text').value = '';
+    document.getElementById('modal').classList.add('open');
+    setTimeout(() => document.getElementById('modal-text').focus(), 100);
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+  }
+
+  // Drag & Drop
+  function dragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+  }
+
+  function dragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+
+  function drop(e, colId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    if (draggedCard) {
+      const emptyState = e.currentTarget.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+      draggedCard.dataset.col = colId;
+      e.currentTarget.appendChild(draggedCard);
+      updateStats();
+    }
+  }
+
+  function updateStats() {
+    ['todo', 'progress', 'done'].forEach(col => {
+      const count = document.getElementById('col-' + col).querySelectorAll('.card').length;
+      document.getElementById('badge-' + col).textContent = count;
+      document.getElementById('stat-' + col).textContent = count;
+    });
+  }
+
+  // Zavřít modal kliknutím mimo
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  // Enter pro odeslání
+  document.getElementById('modal-text').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) addCard();
+  });
+
+  // Načíst výchozí karty
+  defaultCards.forEach(({ col, text, tag }) => {
+    const area = document.getElementById('col-' + col);
+    area.appendChild(createCard(text, tag, col));
+  });
+
+  updateStats();
+</script>
+
+</body>
+</html>

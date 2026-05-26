@@ -224,6 +224,12 @@
       cursor: grabbing;
     }
 
+    /* Long press vizuální efekt */
+    .card.pressing {
+      transform: scale(0.97);
+      transition: transform 0.3s;
+    }
+
     /* Completed card */
     .card.completed {
       background: #e8f5e4;
@@ -872,38 +878,64 @@
     }
   }
 
-  // Touch podpora pro mobil a tablet
+  // Touch podpora pro mobil a tablet (long press)
   let touchClone = null;
   let touchOffsetX = 0;
   let touchOffsetY = 0;
+  let longPressTimer = null;
+  let isDragging = false;
+  let longPressCard = null;
+  let longPressTouch = null;
 
   function touchStart(e) {
-    draggedCard = e.currentTarget;
-    const touch = e.touches[0];
-    const rect = draggedCard.getBoundingClientRect();
-    touchOffsetX = touch.clientX - rect.left;
-    touchOffsetY = touch.clientY - rect.top;
+    longPressCard = e.currentTarget;
+    longPressTouch = e.touches[0];
+    isDragging = false;
+    longPressCard.classList.add('pressing');
 
-    touchClone = draggedCard.cloneNode(true);
-    touchClone.style.cssText = `
-      position: fixed;
-      width: ${rect.width}px;
-      opacity: 0.85;
-      pointer-events: none;
-      z-index: 9999;
-      left: ${touch.clientX - touchOffsetX}px;
-      top: ${touch.clientY - touchOffsetY}px;
-      transform: rotate(2deg) scale(1.03);
-      box-shadow: 0 12px 32px rgba(0,0,0,0.2);
-      transition: none;
-    `;
-    document.body.appendChild(touchClone);
-    draggedCard.classList.add('dragging');
+    longPressTimer = setTimeout(() => {
+      isDragging = true;
+      draggedCard = longPressCard;
+      longPressCard.classList.remove('pressing');
+
+      const touch = longPressTouch;
+      const rect = draggedCard.getBoundingClientRect();
+      touchOffsetX = touch.clientX - rect.left;
+      touchOffsetY = touch.clientY - rect.top;
+
+      touchClone = draggedCard.cloneNode(true);
+      touchClone.style.cssText = `
+        position: fixed;
+        width: ${rect.width}px;
+        opacity: 0.85;
+        pointer-events: none;
+        z-index: 9999;
+        left: ${touch.clientX - touchOffsetX}px;
+        top: ${touch.clientY - touchOffsetY}px;
+        transform: rotate(2deg) scale(1.03);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+        transition: none;
+      `;
+      document.body.appendChild(touchClone);
+      draggedCard.classList.add('dragging');
+
+      // Vibrační feedback (pokud telefon podporuje)
+      if (navigator.vibrate) navigator.vibrate(50);
+    }, 500); // 500ms podržení
   }
 
   function touchMove(e) {
-    e.preventDefault();
     const touch = e.touches[0];
+    longPressTouch = touch;
+
+    if (!isDragging) {
+      // Pokud se prst pohnul před aktivací, zruš long press
+      clearTimeout(longPressTimer);
+      if (longPressCard) longPressCard.classList.remove('pressing');
+      return;
+    }
+
+    e.preventDefault();
     if (touchClone) {
       touchClone.style.left = `${touch.clientX - touchOffsetX}px`;
       touchClone.style.top = `${touch.clientY - touchOffsetY}px`;
@@ -915,10 +947,19 @@
   }
 
   function touchEnd(e) {
+    clearTimeout(longPressTimer);
+
+    if (!isDragging) {
+      if (longPressCard) longPressCard.classList.remove('pressing');
+      draggedCard = null;
+      return;
+    }
+
     const touch = e.changedTouches[0];
     if (touchClone) { document.body.removeChild(touchClone); touchClone = null; }
     if (draggedCard) draggedCard.classList.remove('dragging');
     document.querySelectorAll('.cards-area').forEach(area => area.classList.remove('drag-over'));
+
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     const area = el ? el.closest('.cards-area') : null;
     if (area && draggedCard) {
@@ -928,7 +969,9 @@
       updateStats();
       saveToStorage();
     }
+
     draggedCard = null;
+    isDragging = false;
   }
 
   function updateStats() {

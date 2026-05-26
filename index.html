@@ -660,35 +660,59 @@
   let currentColumn = 'todo';
   let draggedCard = null;
 
-  // Výchozí úkoly
-  const defaultCards = [
-    { col: 'todo', text: 'Navrhnout nové logo projektu', tag: 'design' },
-    { col: 'todo', text: 'Sepsat požadavky na novou funkci', tag: 'feature' },
-    { col: 'progress', text: 'Opravit chybu v přihlašování', tag: 'bug' },
-    { col: 'progress', text: 'Optimalizovat rychlost načítání', tag: 'dev' },
-    { col: 'done', text: 'Spustit kampaň na sociálních sítích', tag: 'marketing' },
-    { col: 'done', text: 'Aktualizovat dokumentaci', tag: 'dev' },
-  ];
+  const tagLabels = {
+    design: { label: 'Design', cls: 'tag-design' },
+    dev: { label: 'Vývoj', cls: 'tag-dev' },
+    marketing: { label: 'Marketing', cls: 'tag-marketing' },
+    bug: { label: 'Bug', cls: 'tag-bug' },
+    feature: { label: 'Funkce', cls: 'tag-feature' },
+  };
 
-  function createCard(text, tag, colId) {
+  // --- UKLÁDÁNÍ ---
+  function saveToStorage() {
+    const data = [];
+    ['todo', 'progress', 'done'].forEach(col => {
+      document.getElementById('col-' + col).querySelectorAll('.card').forEach(card => {
+        data.push({
+          col: col,
+          text: card.querySelector('.card-text').textContent,
+          tag: card.dataset.tag,
+          completed: card.classList.contains('completed')
+        });
+      });
+    });
+    localStorage.setItem('taskboard', JSON.stringify(data));
+  }
+
+  function loadFromStorage() {
+    const raw = localStorage.getItem('taskboard');
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    // Výchozí úkoly při prvním spuštění
+    return [
+      { col: 'todo', text: 'Navrhnout nové logo projektu', tag: 'design', completed: false },
+      { col: 'todo', text: 'Sepsat požadavky na novou funkci', tag: 'feature', completed: false },
+      { col: 'progress', text: 'Opravit chybu v přihlašování', tag: 'bug', completed: false },
+      { col: 'progress', text: 'Optimalizovat rychlost načítání', tag: 'dev', completed: false },
+      { col: 'done', text: 'Spustit kampaň na sociálních sítích', tag: 'marketing', completed: true },
+      { col: 'done', text: 'Aktualizovat dokumentaci', tag: 'dev', completed: true },
+    ];
+  }
+
+  // --- KARTA ---
+  function createCard(text, tag, colId, completed = false) {
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card' + (completed ? ' completed' : '');
     card.draggable = true;
     card.dataset.col = colId;
-
-    const tagLabels = {
-      design: { label: 'Design', cls: 'tag-design' },
-      dev: { label: 'Vývoj', cls: 'tag-dev' },
-      marketing: { label: 'Marketing', cls: 'tag-marketing' },
-      bug: { label: 'Bug', cls: 'tag-bug' },
-      feature: { label: 'Funkce', cls: 'tag-feature' },
-    };
+    card.dataset.tag = tag;
 
     const tagInfo = tagLabels[tag] || tagLabels['dev'];
 
     card.innerHTML = `
       <div class="card-top">
-        <input type="checkbox" class="task-checkbox" onchange="toggleDone(this)">
+        <input type="checkbox" class="task-checkbox" ${completed ? 'checked' : ''} onchange="toggleDone(this)">
         <div class="card-text">${text}</div>
       </div>
       <div class="card-edit-area">
@@ -715,9 +739,9 @@
     card.addEventListener('dragend', () => {
       card.classList.remove('dragging');
       draggedCard = null;
+      saveToStorage();
     });
 
-    // Touch podpora pro mobil
     card.addEventListener('touchstart', touchStart, { passive: true });
     card.addEventListener('touchmove', touchMove, { passive: false });
     card.addEventListener('touchend', touchEnd);
@@ -728,6 +752,7 @@
   function toggleDone(checkbox) {
     const card = checkbox.closest('.card');
     card.classList.toggle('completed', checkbox.checked);
+    saveToStorage();
   }
 
   function startEdit(btn) {
@@ -749,8 +774,10 @@
     const newText = editArea.querySelector('textarea').value.trim();
     if (!newText) return;
     card.querySelector('.card-text').textContent = newText;
+    editArea.querySelector('textarea').value = newText;
     editArea.style.display = 'none';
     cardTop.style.display = 'flex';
+    saveToStorage();
   }
 
   function cancelEdit(btn) {
@@ -763,19 +790,17 @@
     const text = document.getElementById('modal-text').value.trim();
     const tag = document.getElementById('modal-tag').value;
     if (!text) return;
-
     const col = document.getElementById('col-' + currentColumn);
-    const emptyState = col.querySelector('.empty-state');
-    if (emptyState) emptyState.remove();
-
     col.appendChild(createCard(text, tag, currentColumn));
     updateStats();
+    saveToStorage();
     closeModal();
   }
 
   function deleteCard(btn) {
     btn.closest('.card').remove();
     updateStats();
+    saveToStorage();
   }
 
   function openModal(col) {
@@ -803,11 +828,10 @@
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
     if (draggedCard) {
-      const emptyState = e.currentTarget.querySelector('.empty-state');
-      if (emptyState) emptyState.remove();
       draggedCard.dataset.col = colId;
       e.currentTarget.appendChild(draggedCard);
       updateStats();
+      saveToStorage();
     }
   }
 
@@ -847,8 +871,6 @@
       touchClone.style.left = `${touch.clientX - touchOffsetX}px`;
       touchClone.style.top = `${touch.clientY - touchOffsetY}px`;
     }
-
-    // Zvýrazni sloupec pod prstem
     document.querySelectorAll('.cards-area').forEach(area => area.classList.remove('drag-over'));
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     const area = el ? el.closest('.cards-area') : null;
@@ -857,24 +879,18 @@
 
   function touchEnd(e) {
     const touch = e.changedTouches[0];
-    if (touchClone) {
-      document.body.removeChild(touchClone);
-      touchClone = null;
-    }
+    if (touchClone) { document.body.removeChild(touchClone); touchClone = null; }
     if (draggedCard) draggedCard.classList.remove('dragging');
-
     document.querySelectorAll('.cards-area').forEach(area => area.classList.remove('drag-over'));
-
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     const area = el ? el.closest('.cards-area') : null;
-
     if (area && draggedCard) {
       const colId = area.id.replace('col-', '');
       draggedCard.dataset.col = colId;
       area.appendChild(draggedCard);
       updateStats();
+      saveToStorage();
     }
-
     draggedCard = null;
   }
 
@@ -896,10 +912,9 @@
     if (e.key === 'Enter' && e.ctrlKey) addCard();
   });
 
-  // Načíst výchozí karty
-  defaultCards.forEach(({ col, text, tag }) => {
-    const area = document.getElementById('col-' + col);
-    area.appendChild(createCard(text, tag, col));
+  // Načíst uložená data
+  loadFromStorage().forEach(({ col, text, tag, completed }) => {
+    document.getElementById('col-' + col).appendChild(createCard(text, tag, col, completed));
   });
 
   updateStats();

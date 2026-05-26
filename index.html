@@ -328,6 +328,78 @@
       background: rgba(180,50,50,0.1);
     }
 
+    .edit-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.2s, background 0.2s;
+      line-height: 1;
+    }
+
+    .edit-btn:hover {
+      color: #BB9959;
+      background: rgba(187,153,89,0.1);
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 2px;
+    }
+
+    /* Inline edit */
+    .card-edit-area {
+      display: none;
+      margin-bottom: 10px;
+    }
+
+    .card-edit-area textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid #BB9959;
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 14px;
+      resize: none;
+      min-height: 70px;
+    }
+
+    .card-edit-area textarea:focus { outline: none; }
+
+    .card-edit-btns {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .btn-save-edit {
+      padding: 5px 12px;
+      background: #BB9959;
+      border: none;
+      border-radius: 6px;
+      color: #3a2e1e;
+      font-family: 'Work Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-cancel-edit {
+      padding: 5px 12px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
     /* Add card button */
     .add-btn {
       margin: 0 16px 16px;
@@ -619,9 +691,19 @@
         <input type="checkbox" class="task-checkbox" onchange="toggleDone(this)">
         <div class="card-text">${text}</div>
       </div>
+      <div class="card-edit-area">
+        <textarea>${text}</textarea>
+        <div class="card-edit-btns">
+          <button class="btn-save-edit" onclick="saveEdit(this)">Uložit</button>
+          <button class="btn-cancel-edit" onclick="cancelEdit(this)">Zrušit</button>
+        </div>
+      </div>
       <div class="card-footer">
         <span class="card-tag ${tagInfo.cls}">${tagInfo.label}</span>
-        <button class="delete-btn" onclick="deleteCard(this)" title="Smazat">✕</button>
+        <div class="card-actions">
+          <button class="edit-btn" onclick="startEdit(this)" title="Upravit">✎</button>
+          <button class="delete-btn" onclick="deleteCard(this)" title="Smazat">✕</button>
+        </div>
       </div>
     `;
 
@@ -635,12 +717,46 @@
       draggedCard = null;
     });
 
+    // Touch podpora pro mobil
+    card.addEventListener('touchstart', touchStart, { passive: true });
+    card.addEventListener('touchmove', touchMove, { passive: false });
+    card.addEventListener('touchend', touchEnd);
+
     return card;
   }
 
   function toggleDone(checkbox) {
     const card = checkbox.closest('.card');
     card.classList.toggle('completed', checkbox.checked);
+  }
+
+  function startEdit(btn) {
+    const card = btn.closest('.card');
+    const cardTop = card.querySelector('.card-top');
+    const editArea = card.querySelector('.card-edit-area');
+    const textarea = editArea.querySelector('textarea');
+    textarea.value = card.querySelector('.card-text').textContent;
+    cardTop.style.display = 'none';
+    editArea.style.display = 'block';
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }
+
+  function saveEdit(btn) {
+    const card = btn.closest('.card');
+    const editArea = card.querySelector('.card-edit-area');
+    const cardTop = card.querySelector('.card-top');
+    const newText = editArea.querySelector('textarea').value.trim();
+    if (!newText) return;
+    card.querySelector('.card-text').textContent = newText;
+    editArea.style.display = 'none';
+    cardTop.style.display = 'flex';
+  }
+
+  function cancelEdit(btn) {
+    const card = btn.closest('.card');
+    card.querySelector('.card-edit-area').style.display = 'none';
+    card.querySelector('.card-top').style.display = 'flex';
   }
 
   function addCard() {
@@ -673,7 +789,7 @@
     document.getElementById('modal').classList.remove('open');
   }
 
-  // Drag & Drop
+  // Drag & Drop (myš)
   function dragOver(e) {
     e.preventDefault();
     e.currentTarget.classList.add('drag-over');
@@ -693,6 +809,73 @@
       e.currentTarget.appendChild(draggedCard);
       updateStats();
     }
+  }
+
+  // Touch podpora pro mobil a tablet
+  let touchClone = null;
+  let touchOffsetX = 0;
+  let touchOffsetY = 0;
+
+  function touchStart(e) {
+    draggedCard = e.currentTarget;
+    const touch = e.touches[0];
+    const rect = draggedCard.getBoundingClientRect();
+    touchOffsetX = touch.clientX - rect.left;
+    touchOffsetY = touch.clientY - rect.top;
+
+    touchClone = draggedCard.cloneNode(true);
+    touchClone.style.cssText = `
+      position: fixed;
+      width: ${rect.width}px;
+      opacity: 0.85;
+      pointer-events: none;
+      z-index: 9999;
+      left: ${touch.clientX - touchOffsetX}px;
+      top: ${touch.clientY - touchOffsetY}px;
+      transform: rotate(2deg) scale(1.03);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+      transition: none;
+    `;
+    document.body.appendChild(touchClone);
+    draggedCard.classList.add('dragging');
+  }
+
+  function touchMove(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (touchClone) {
+      touchClone.style.left = `${touch.clientX - touchOffsetX}px`;
+      touchClone.style.top = `${touch.clientY - touchOffsetY}px`;
+    }
+
+    // Zvýrazni sloupec pod prstem
+    document.querySelectorAll('.cards-area').forEach(area => area.classList.remove('drag-over'));
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const area = el ? el.closest('.cards-area') : null;
+    if (area) area.classList.add('drag-over');
+  }
+
+  function touchEnd(e) {
+    const touch = e.changedTouches[0];
+    if (touchClone) {
+      document.body.removeChild(touchClone);
+      touchClone = null;
+    }
+    if (draggedCard) draggedCard.classList.remove('dragging');
+
+    document.querySelectorAll('.cards-area').forEach(area => area.classList.remove('drag-over'));
+
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const area = el ? el.closest('.cards-area') : null;
+
+    if (area && draggedCard) {
+      const colId = area.id.replace('col-', '');
+      draggedCard.dataset.col = colId;
+      area.appendChild(draggedCard);
+      updateStats();
+    }
+
+    draggedCard = null;
   }
 
   function updateStats() {

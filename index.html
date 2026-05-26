@@ -371,6 +371,25 @@
 
     .card-edit-area textarea:focus { outline: none; }
 
+    .edit-tag-select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 13px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b7a5a' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+
+    .edit-tag-select:focus { outline: none; border-color: #BB9959; }
+
     .card-edit-btns {
       display: flex;
       gap: 6px;
@@ -717,6 +736,13 @@
       </div>
       <div class="card-edit-area">
         <textarea>${text}</textarea>
+        <select class="edit-tag-select">
+          <option value="dev" ${tag === 'dev' ? 'selected' : ''}>💻 Vývoj</option>
+          <option value="design" ${tag === 'design' ? 'selected' : ''}>🎨 Design</option>
+          <option value="marketing" ${tag === 'marketing' ? 'selected' : ''}>📣 Marketing</option>
+          <option value="bug" ${tag === 'bug' ? 'selected' : ''}>🐛 Bug</option>
+          <option value="feature" ${tag === 'feature' ? 'selected' : ''}>✨ Nová funkce</option>
+        </select>
         <div class="card-edit-btns">
           <button class="btn-save-edit" onclick="saveEdit(this)">Uložit</button>
           <button class="btn-cancel-edit" onclick="cancelEdit(this)">Zrušit</button>
@@ -772,9 +798,20 @@
     const editArea = card.querySelector('.card-edit-area');
     const cardTop = card.querySelector('.card-top');
     const newText = editArea.querySelector('textarea').value.trim();
+    const newTag = editArea.querySelector('.edit-tag-select').value;
     if (!newText) return;
+
+    // Aktualizuj text
     card.querySelector('.card-text').textContent = newText;
     editArea.querySelector('textarea').value = newText;
+
+    // Aktualizuj kategorii
+    const tagInfo = tagLabels[newTag] || tagLabels['dev'];
+    const tagEl = card.querySelector('.card-tag');
+    tagEl.className = `card-tag ${tagInfo.cls}`;
+    tagEl.textContent = tagInfo.label;
+    card.dataset.tag = newTag;
+
     editArea.style.display = 'none';
     cardTop.style.display = 'flex';
     saveToStorage();

@@ -775,8 +775,8 @@
     });
 
     card.addEventListener('touchstart', touchStart, { passive: true });
-    card.addEventListener('touchmove', touchMove, { passive: false });
-    card.addEventListener('touchend', touchEnd);
+    card.addEventListener('touchmove', touchMoveCancel, { passive: true });
+    card.addEventListener('touchend', touchCancel);
 
     return card;
   }
@@ -919,23 +919,35 @@
       document.body.appendChild(touchClone);
       draggedCard.classList.add('dragging');
 
-      // Vibrační feedback (pokud telefon podporuje)
       if (navigator.vibrate) navigator.vibrate(50);
-    }, 500); // 500ms podržení
+
+      // Po aktivaci přidáme non-passive listenery na document
+      document.addEventListener('touchmove', touchMove, { passive: false });
+      document.addEventListener('touchend', touchEnd);
+    }, 500);
+  }
+
+  // Pouze sleduje pohyb před aktivací – pokud se prst moc pohnul, zruší long press
+  function touchMoveCancel(e) {
+    if (!isDragging) {
+      clearTimeout(longPressTimer);
+      if (longPressCard) longPressCard.classList.remove('pressing');
+    }
+  }
+
+  // Zruší long press pokud prst pustí před aktivací
+  function touchCancel(e) {
+    clearTimeout(longPressTimer);
+    if (longPressCard) longPressCard.classList.remove('pressing');
+    if (!isDragging) {
+      draggedCard = null;
+    }
   }
 
   function touchMove(e) {
-    const touch = e.touches[0];
-    longPressTouch = touch;
-
-    if (!isDragging) {
-      // Pokud se prst pohnul před aktivací, zruš long press
-      clearTimeout(longPressTimer);
-      if (longPressCard) longPressCard.classList.remove('pressing');
-      return;
-    }
-
+    if (!isDragging) return;
     e.preventDefault();
+    const touch = e.touches[0];
     if (touchClone) {
       touchClone.style.left = `${touch.clientX - touchOffsetX}px`;
       touchClone.style.top = `${touch.clientY - touchOffsetY}px`;
@@ -947,13 +959,8 @@
   }
 
   function touchEnd(e) {
-    clearTimeout(longPressTimer);
-
-    if (!isDragging) {
-      if (longPressCard) longPressCard.classList.remove('pressing');
-      draggedCard = null;
-      return;
-    }
+    document.removeEventListener('touchmove', touchMove);
+    document.removeEventListener('touchend', touchEnd);
 
     const touch = e.changedTouches[0];
     if (touchClone) { document.body.removeChild(touchClone); touchClone = null; }
